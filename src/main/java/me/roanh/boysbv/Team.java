@@ -28,17 +28,22 @@ final class Team {
     }
 
     String rank(UUID player) {
-        return player.equals(leader) ? "leader" : peasants.contains(player) ? "peasant" : "muggle";
+        return player.equals(leader) ? "chosen one" : peasants.contains(player) ? "peasant" : "muggle";
     }
 
     void requireLeader(UUID player) {
-        if (!player.equals(leader)) throw new IllegalArgumentException("Only your team leader can do this.");
+        if (!player.equals(leader)) throw new IllegalArgumentException("Only your team's chosen one can do this.");
+    }
+
+    void requireTrusted(UUID player) {
+        if (!members.containsKey(player) || (!player.equals(leader) && !peasants.contains(player)))
+            throw new IllegalArgumentException("Only peasants and the chosen one can do this.");
     }
 
     void leave(UUID player) {
         if (player.equals(leader)) throw new IllegalArgumentException(members.size() == 1
                 ? "Use /team disabandon to delete your solo team."
-                : "Promote a peasant to leader before leaving.");
+                : "Promote a peasant to chosen one before leaving.");
         members.remove(player);
         peasants.remove(player);
     }

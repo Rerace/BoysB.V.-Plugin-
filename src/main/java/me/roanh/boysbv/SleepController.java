@@ -49,7 +49,8 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
     private List<Player> eligible(World world) {
         return world.getPlayers().stream().filter(p -> p.getGameMode() != GameMode.SPECTATOR && !p.isSleepingIgnored()).toList();
     }
-    private int needed(World world) { return required(plugin.getConfig().getString("sleep.amount", "50%"), eligible(world).size()); }
+    int currentRequired(int online) { return required(plugin.getConfig().getString("sleep.amount", "50%"), online); }
+    private int needed(World world) { return currentRequired(eligible(world).size()); }
     private boolean enough(World world) {
         var players = eligible(world);
         // Daytime resting must never advance the clock by a full day.
@@ -104,10 +105,14 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
             String action = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
             switch (action) {
                 case "amount" -> {
+                    if (args.length == 1) {
+                        say(sender, "Current sleep requirement: " + plugin.getConfig().getString("sleep.amount") + ".");
+                        return true;
+                    }
                     require(args.length == 2, "Use /sleep amount <count|percentage%>.");
                     required(args[1], 1);
                     plugin.saveSetting("sleep.amount", args[1]);
-                    say(sender, "Sleep requirement: " + args[1] + ". All eligible players sleeping also skips night.");
+                    say(sender, "Sleep requirement: " + args[1] + ". This replaces the previous count or percentage. All eligible players sleeping also skips night.");
                 }
                 case "daytime" -> {
                     require(args.length == 2, "Use /sleep daytime <allow|deny>.");

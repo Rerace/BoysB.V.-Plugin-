@@ -21,6 +21,7 @@ class TeamRulesTest {
         assertEquals(alice, t.leader);
         t.promote(alice, bob);
         assertEquals(bob, t.leader);
+        assertEquals("chosen one", t.rank(bob));
         assertEquals("peasant", t.rank(alice));
         t.leave(alice);
         assertFalse(t.members.containsKey(alice));
@@ -63,6 +64,7 @@ class TeamRulesTest {
         var reloaded = new TeamStore(file);
         Team restored = reloaded.own(bob);
         assertEquals(alice, restored.leader);
+        assertEquals("chosen one", restored.rank(alice));
         assertEquals("peasant", restored.rank(bob));
         assertEquals(Set.of(invited), restored.invites);
         assertEquals("#123456", restored.color);
@@ -111,5 +113,28 @@ class TeamRulesTest {
         assertEquals(0, SleepController.required("50%", 0));
         for (String bad : List.of("0", "0%", "101%", "-1", "NaN", "1.5", ""))
             assertThrows(IllegalArgumentException.class, () -> SleepController.required(bad, 4));
+    }
+
+    @Test void playTimeUsesTicksAndTeamTotalsDoNotOverflowAnInteger() {
+        assertEquals("0d 0h 0m 0s", PlayerStats.duration(19));
+        assertEquals("1d 2h 3m 4s", PlayerStats.duration((86400L + 2 * 3600 + 3 * 60 + 4) * 20));
+        var stats = new PlayerStats(Integer.MAX_VALUE, Integer.MAX_VALUE, Integer.MAX_VALUE);
+        assertEquals(2L * Integer.MAX_VALUE, stats.plus(stats).deaths());
+        assertEquals(2L * Integer.MAX_VALUE, stats.plus(stats).playTicks());
+        assertEquals(2L * Integer.MAX_VALUE, stats.plus(stats).playerKills());
+    }
+
+    @Test void statisticsFallBackToSavedDataWhenThePlayerIsOffline() {
+        // MockBukkit does not implement offline statistics. Supply only the public
+        // OfflinePlayer methods needed to verify the offline fallback explicitly.
+        var saved = Map.of(org.bukkit.Statistic.DEATHS, 7, org.bukkit.Statistic.PLAY_ONE_MINUTE, 2400,
+                org.bukkit.Statistic.PLAYER_KILLS, 2);
+        var offline = (org.bukkit.OfflinePlayer) java.lang.reflect.Proxy.newProxyInstance(
+                getClass().getClassLoader(), new Class<?>[]{org.bukkit.OfflinePlayer.class}, (proxy, method, args) -> {
+                    if (method.getName().equals("getPlayer")) return null;
+                    if (method.getName().equals("getStatistic")) return saved.get(args[0]);
+                    throw new UnsupportedOperationException(method.getName());
+                });
+        assertEquals(new PlayerStats(7, 2400, 2), PlayerStats.read(offline));
     }
 }

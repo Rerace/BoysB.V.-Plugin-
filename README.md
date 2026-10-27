@@ -7,7 +7,7 @@ LuckPerms can manage the standard Bukkit permission `boysbv.team`.
 ## Install
 
 1. Build with `./gradlew.bat build` from the repository root (Linux: `sh ./gradlew build`).
-2. Stop the server and copy `build/libs/BoysBV-1.0.0.jar` into `plugins/`.
+2. Stop the server and copy `build/libs/BoysBV-1.1.0.jar` into `plugins/`. Remove the previous BoysBV JAR when upgrading.
 3. Start Paper 26.3. In game, run `/team help`; operators can run `/sleep help`.
 
 The plugin creates `plugins/BoysBV/config.yml` and saves teams in `plugins/BoysBV/teams.yml`.
@@ -24,19 +24,21 @@ before installing BoysBV. Avoid running two sleep or locator managers together.
 
 | Command | Behaviour |
 | --- | --- |
-| `/team create <name>` | Creates an invite-only team with you as leader. Names are unique ignoring case, 1–32 characters. Spaces and periods are supported. |
+| `/team create <name>` | Creates an invite-only team with you as chosen one. Names are unique ignoring case, 1–32 characters. Spaces and periods are supported. |
 | `/team join <name>` | Joins an open team or accepts your invitation. One team per player. |
 | `/team leave` | Members can leave; leaders must transfer leadership first. |
 | `/team disabandon` | Deletes your team only when you are its sole member and leader. `/team disband` also works. |
-| `/team invite <player>` | Leader invites an online or previously known player. Invitations survive restarts. |
+| `/team invite <player>` | Peasants and the chosen one can invite an online or previously known player. Invitations survive restarts. |
 | `/team invite accept <team name>` | Accepts an invitation. |
 | `/team invite deny <team name>` | Declines an invitation. |
 | `/team chat` | Toggles between private team chat and normal global chat. Resets on logout/removal/leave. |
-| `/team info` | Shows team name, leader, members, ranks, join mode and PvP setting. |
-| `/team promote <player>` | Leader promotes muggle → peasant → leader. Promoting a peasant transfers leadership; the former leader becomes peasant. |
+| `/team info` | Shows your team's name, chosen one, members, ranks, join mode, PvP setting, and each member's deaths, total play time and player kills, plus team totals. |
+| `/team info <team>` | Shows the same information for a named team, even if you are not a member. Names can contain spaces. |
+| `/team player info` | Shows your own deaths, total play time and player kills, even if you have no team. |
+| `/team promote <player>` | Chosen one promotes muggle → peasant → chosen one. Promoting a peasant transfers leadership; the former chosen one becomes peasant. |
 | `/team remove <player>` | Leader removes another member. |
 | `/team safe` | Lists up to five shared saved messages, numbered. |
-| `/team safe add <message>` | Any member saves a message, up to 256 characters. `/team safe <message>` also works. |
+| `/team safe add <message>` | Peasants and the chosen one can save a message, up to 256 characters. `/team safe <message>` also works with the same rank restriction. All members can read saved messages. |
 | `/team safe remove <number>` | Leader removes a saved message, freeing a slot. |
 | `/team settings <open\|invite\|closed>` | Leader changes joining rules. Closed blocks invitations and joins and clears outstanding invitations. |
 | `/team color <color>` | Leader chooses a standard color name or `#RRGGBB`, used in team info, private chat and team locator dots. |
@@ -44,9 +46,18 @@ before installing BoysBV. Avoid running two sleep or locator managers together.
 | `/team pvp <allow\|deny>` | Leader changes friendly damage. Default: deny. Applies to player-caused melee, projectile and other attributed damage; environmental damage still applies. |
 | `/team compass <team\|global\|off>` | **Server operator only.** Sets the locator mode for everyone. |
 
-Peasants have the same commands as muggles until promoted to leader.
+Peasants can invite players and add saved messages. Only the chosen one can promote,
+remove members, rename/recolor the team, change join/PvP settings or remove saved messages.
+"Leader" in the remaining command descriptions means chosen one.
 An operator does not bypass team leadership checks.
-If a leader is offline, team leadership remains theirs.
+If the chosen one is offline, team leadership remains theirs. Existing teams keep their
+members and promotions on upgrade; the previous leader is displayed as chosen one.
+
+Statistics come directly from Minecraft's existing server statistics, including history
+from before plugin installation. Offline team members use their saved statistics.
+Play time is displayed in days, hours, minutes and seconds, using 20 game ticks per second.
+Team totals sum the lifetime statistics of current members, rather than only their time
+in the team. No extra statistics file or reset is required.
 
 ### XP-bar compass
 
@@ -70,6 +81,7 @@ Recheck this adapter before upgrading Minecraft.
 | --- | --- |
 | `/sleep amount <number>` | Sets a positive number of sleepers required. If fewer eligible players are online, all of them sleeping is sufficient. |
 | `/sleep amount <percentage>%` | Sets 1%–100%, rounded up. Default: 50%. Example: `/sleep amount 50%`. |
+| `/sleep amount` | Shows the currently saved sleep requirement. |
 | `/sleep text add <text>` | Appends a sleep announcement. |
 | `/sleep text remove <number>` | Removes a numbered announcement. |
 | `/sleep text info` | Lists all saved texts with numbers. |
@@ -81,6 +93,9 @@ Delete every announcement to silence them. Messages are plain text, so player te
 inject formatting or command actions.
 
 Sleep counts are **per normal/Overworld world**, matching vanilla's independent nights.
+Only the **latest successfully set** requirement applies: `/sleep amount 2` replaces any
+previous percentage, and `/sleep amount 50%` replaces any previous count. It applies
+immediately and is saved across restarts. Invalid input leaves the previous value active.
 Spectators and players marked sleeping-ignored do not count. Sleepers must be in bed for
 100 ticks (five seconds) before counting toward a skip. The plugin lets the server perform
 the normal night transition and weather handling. Original sleep game rules are restored

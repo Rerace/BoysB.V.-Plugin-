@@ -102,7 +102,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                     store.unique(name, null);
                     var t = new Team(UUID.randomUUID().toString(), name, id, p.getName());
                     store.change(() -> store.teams.put(t.id, t));
-                    say(p, "Created " + name + ". You are leader. Joining is invite-only until you change /team settings.");
+                    say(p, "Created " + name + ". You are the chosen one. Joining is invite-only until you change /team settings.");
                 }
                 case "join" -> {
                     require(args.length >= 2, "Use /team join <name>.");
@@ -131,7 +131,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                     } else {
                         require(args.length == 2, "Use /team invite <player> or /team invite <accept|deny> <team name>.");
                         Team t = own(p);
-                        t.requireLeader(id);
+                        t.requireTrusted(id);
                         require(!t.mode.equals("closed"), "Your team is closed. Change /team settings first.");
                         var target = getServer().getPlayerExact(args[1]);
                         var known = target != null ? target : getServer().getOfflinePlayerIfCached(args[1]);
@@ -148,10 +148,12 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                     else { teamChat.add(id); say(p, "Team chat enabled."); }
                 }
                 case "info" -> {
-                    Team t = own(p);
-                    p.sendMessage(Component.text(t.name, color(t.color)));
-                    say(p, "Joining: " + t.mode + " | PvP: " + (t.pvp ? "allow" : "deny"));
-                    t.members.forEach((uuid, name) -> say(p, name + " - " + t.rank(uuid)));
+                    showTeam(p, args.length == 1 ? own(p) : store.named(tail(args, 1)));
+                }
+                case "player" -> {
+                    require(args.length == 2 && args[1].equalsIgnoreCase("info"), "Use /team player info.");
+                    say(p, "Player: " + p.getName());
+                    say(p, PlayerStats.read(p).summary());
                 }
                 case "promote", "remove" -> {
                     require(args.length == 2, "Use /team " + action + " <player>.");
@@ -225,18 +227,32 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
             store.change(() -> t.notes.remove(index));
             say(p, "Message removed.");
         } else {
+            t.requireTrusted(p.getUniqueId());
             String note = tail(args, args[1].equalsIgnoreCase("add") ? 2 : 1);
             store.change(() -> t.addNote(note));
             say(p, "Team message saved.");
         }
     }
 
+    private void showTeam(Player viewer, Team team) {
+        viewer.sendMessage(Component.text(team.name, color(team.color)));
+        say(viewer, "Chosen one: " + team.members.get(team.leader));
+        say(viewer, "Joining: " + team.mode + " | PvP: " + (team.pvp ? "allow" : "deny"));
+        PlayerStats total = new PlayerStats(0, 0, 0);
+        for (var member : team.members.entrySet()) {
+            PlayerStats stats = PlayerStats.read(getServer().getOfflinePlayer(member.getKey()));
+            say(viewer, member.getValue() + " - " + team.rank(member.getKey()) + " | " + stats.summary());
+            total = total.plus(stats);
+        }
+        say(viewer, "Team totals | " + total.summary());
+    }
+
     private void help(CommandSender s) {
-        say(s, "/team create <name> | join <name> | leave | disabandon | info | chat");
-        say(s, "/team invite <player> | invite accept <team> | invite deny <team>");
-        say(s, "/team safe [add <message>|remove <number>|info] (five shared messages)");
-        say(s, "Leader: /team promote <player> | remove <player> | settings <open|invite|closed>");
-        say(s, "Leader: /team color <color> | name <name> | pvp <allow|deny>");
+        say(s, "/team create <name> | join <name> | leave | disabandon | info [team] | player info | chat");
+        say(s, "/team invite accept <team> | invite deny <team> | safe [info]");
+        say(s, "Peasant/chosen one: /team invite <player> | safe add <message> (five shared messages)");
+        say(s, "Chosen one: /team promote <player> | remove <player> | settings <open|invite|closed>");
+        say(s, "Chosen one: /team color <color> | name <name> | pvp <allow|deny> | safe remove <number>");
         if (s.isOp()) say(s, "Operator: /team compass <team|global|off> and /sleep help");
     }
 
@@ -285,24 +301,42 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
         List<String> options = new ArrayList<>();
         Team t = sender instanceof Player p ? store.own(p.getUniqueId()) : null;
         if (args.length == 1) {
-            options.addAll(List.of("help", "create", "join", "leave", "disabandon", "invite", "chat", "info", "safe"));
+            options.addAll(List.of("help", "create", "join", "leave", "disabandon", "invite", "chat", "info", "player", "safe"));
             if (t != null && sender instanceof Player p && p.getUniqueId().equals(t.leader))
                 options.addAll(List.of("promote", "remove", "settings", "color", "name", "pvp"));
             if (sender.isOp()) options.add("compass");
         } else if (args.length == 2) {
             switch (args[0].toLowerCase(Locale.ROOT)) {
-                case "join" -> store.teams.values().forEach(team -> options.add(team.name));
+                case "join", "info" -> store.teams.values().forEach(team -> options.add(team.name));
+                case "player" -> options.add("info");
                 case "settings" -> options.addAll(List.of("open", "invite", "closed"));
                 case "pvp" -> options.addAll(List.of("allow", "deny"));
                 case "compass" -> { if (sender.isOp()) options.addAll(List.of("team", "global", "off")); }
                 case "color" -> options.addAll(NamedTextColor.NAMES.keys());
                 case "promote", "remove" -> { if (t != null) options.addAll(t.members.values()); }
-                case "safe" -> options.addAll(List.of("add", "remove", "info"));
-                case "invite" -> { options.addAll(List.of("accept", "deny")); getServer().getOnlinePlayers().forEach(p -> options.add(p.getName())); }
+                case "safe" -> {
+                    options.add("info");
+                    if (t != null && sender instanceof Player p) {
+                        if (t.leader.equals(p.getUniqueId()) || t.peasants.contains(p.getUniqueId())) options.add("add");
+                        if (t.leader.equals(p.getUniqueId())) options.add("remove");
+                    }
+                }
+                case "invite" -> {
+                    options.addAll(List.of("accept", "deny"));
+                    if (t != null && sender instanceof Player p && (t.leader.equals(p.getUniqueId()) || t.peasants.contains(p.getUniqueId())))
+                        getServer().getOnlinePlayers().forEach(target -> options.add(target.getName()));
+                }
             }
         } else if (args[0].equalsIgnoreCase("invite") && args.length >= 3 && sender instanceof Player p
                 && List.of("accept", "deny").contains(args[1].toLowerCase(Locale.ROOT))) {
             store.teams.values().stream().filter(team -> team.invites.contains(p.getUniqueId())).forEach(team -> options.add(team.name));
+        }
+        if (args.length > 2 && List.of("info", "join").contains(args[0].toLowerCase(Locale.ROOT))) {
+            String entered = tail(args, 1);
+            String beforeLast = tail(Arrays.copyOf(args, args.length - 1), 1) + " ";
+            return store.teams.values().stream().map(team -> team.name)
+                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(entered.toLowerCase(Locale.ROOT)))
+                    .map(name -> name.substring(beforeLast.length())).sorted().toList();
         }
         String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
         return options.stream().filter(v -> v.toLowerCase(Locale.ROOT).startsWith(prefix)).sorted().toList();

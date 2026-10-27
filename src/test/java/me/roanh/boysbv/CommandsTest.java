@@ -90,12 +90,108 @@ class CommandsTest {
         command(alice, "team create Alpha");
         command(alice, "team settings open");
         command(bob, "team join Alpha");
+        command(alice, "team promote Bob");
         for (int i = 0; i < 6; i++) command(bob, "team safe add base " + i);
         assertEquals(5, team().notes.size());
         command(bob, "team safe remove 1");
         assertEquals(5, team().notes.size());
         command(alice, "team safe remove 1");
         assertEquals(4, team().notes.size());
+    }
+
+    @Test void onlyPeasantsAndChosenOneCanInviteAndSaveEvenThroughAliases() {
+        command(alice, "team create Alpha");
+        assertEquals("chosen one", team().rank(alice.getUniqueId()));
+        command(alice, "team settings open");
+        command(bob, "team join Alpha");
+        bob.setOp(true); // Operator status must not bypass the team rank.
+        command(bob, "team invite Outsider");
+        command(bob, "team safe add denied");
+        command(bob, "team safe denied shortcut");
+        command(bob, "team save add denied alias");
+        assertTrue(team().invites.isEmpty());
+        assertTrue(team().notes.isEmpty());
+        command(alice, "team promote Bob");
+        command(bob, "team invite Outsider");
+        command(bob, "team safe add peasant message");
+        command(alice, "team safe add chosen one message");
+        assertTrue(team().invites.contains(outsider.getUniqueId()));
+        assertEquals(List.of("peasant message", "chosen one message"), team().notes);
+        command(bob, "team name CannotRename");
+        command(bob, "team promote Alice");
+        assertEquals("Alpha", team().name);
+        assertEquals(alice.getUniqueId(), team().leader);
+        command(bob, "team invite accept Missing");
+        assertEquals(team(), plugin.store.own(bob.getUniqueId()));
+    }
+
+    private String messages(PlayerMock player) {
+        StringBuilder result = new StringBuilder();
+        String message;
+        while ((message = player.nextMessage()) != null) result.append(message).append('\n');
+        return result.toString();
+    }
+
+    @Test void ownAndNamedTeamInfoShowEachMembersStatisticsAndTotals() {
+        command(alice, "team create The Boys");
+        command(alice, "team settings open");
+        command(bob, "team join The Boys");
+        alice.setStatistic(Statistic.DEATHS, 3);
+        alice.setStatistic(Statistic.PLAY_ONE_MINUTE, 72000);
+        alice.setStatistic(Statistic.PLAYER_KILLS, 4);
+        bob.setStatistic(Statistic.DEATHS, 2);
+        bob.setStatistic(Statistic.PLAY_ONE_MINUTE, 1200);
+        bob.setStatistic(Statistic.PLAYER_KILLS, 1);
+        messages(alice);
+        command(alice, "team info");
+        String own = messages(alice);
+        assertTrue(own.contains("Chosen one: Alice"));
+        assertTrue(own.contains("Alice - chosen one | Deaths: 3 | Play time: 0d 1h 0m 0s | Player kills: 4"));
+        assertTrue(own.contains("Bob - muggle | Deaths: 2 | Play time: 0d 0h 1m 0s | Player kills: 1"));
+        assertTrue(own.contains("Team totals | Deaths: 5 | Play time: 0d 1h 1m 0s | Player kills: 5"));
+        command(outsider, "team info the boys");
+        assertEquals(own, messages(outsider));
+        command(outsider, "team info Missing");
+        assertTrue(messages(outsider).contains("No team named Missing"));
+        assertEquals(List.of("Boys"), plugin.onTabComplete(alice, plugin.getCommand("team"), "team", new String[]{"info", "The", "B"}));
+    }
+
+    @Test void playerInfoWorksWithoutATeamAndShowsExistingServerStatistics() {
+        outsider.setStatistic(Statistic.DEATHS, 8);
+        outsider.setStatistic(Statistic.PLAY_ONE_MINUTE, 1800);
+        outsider.setStatistic(Statistic.PLAYER_KILLS, 5);
+        command(outsider, "team player info");
+        String output = messages(outsider);
+        assertTrue(output.contains("Player: Outsider"));
+        assertTrue(output.contains("Deaths: 8 | Play time: 0d 0h 1m 30s | Player kills: 5"));
+        assertNull(plugin.store.own(outsider.getUniqueId()));
+    }
+
+    @Test void latestSleepCountOrPercentageWinsImmediatelyAndAfterReload() {
+        alice.setOp(true);
+        alice.getWorld().setTime(14000);
+        alice.setSleeping(true); alice.setSleepTicks(100);
+        command(alice, "sleep amount 100%");
+        assertTrue(nightSkipCancelled());
+        command(alice, "sleep amount 1");
+        assertFalse(nightSkipCancelled());
+        plugin.reloadConfig();
+        assertEquals("1", plugin.getConfig().getString("sleep.amount"));
+        assertEquals(1, new SleepController(plugin).currentRequired(3));
+        command(alice, "sleep amount 75%");
+        assertTrue(nightSkipCancelled());
+        plugin.reloadConfig();
+        assertEquals(3, new SleepController(plugin).currentRequired(3));
+        command(alice, "sleep amount 0");
+        assertEquals("75%", plugin.getConfig().getString("sleep.amount"));
+        command(alice, "sleep amount");
+        assertTrue(messages(alice).contains("Current sleep requirement: 75%"));
+    }
+
+    private boolean nightSkipCancelled() {
+        var event = new TimeSkipEvent(alice.getWorld(), ClockTimeSkipEvent.SkipReason.NIGHT_SKIP, 10000);
+        server.getPluginManager().callEvent(event);
+        return event.isCancelled();
     }
     @Test void sleepSettingsAreValidatedAndPersisted() {
         alice.setOp(true);
