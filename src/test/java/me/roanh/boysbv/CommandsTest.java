@@ -291,4 +291,34 @@ class CommandsTest {
         server.getPluginManager().callEvent(allowed);
         assertFalse(allowed.isCancelled()); // Alice is one of two eligible players.
     }
+
+    @Test void daytimeBedEntryAllowsRestWithoutChangingTimeAndNightStillSkips() {
+        alice.setOp(true);
+        command(alice, "sleep daytime allow");
+        command(alice, "sleep amount 1");
+        World world = alice.getWorld();
+        world.setTime(1000);
+        var action = new io.papermc.paper.block.bed.BedEnterAction() {
+            public io.papermc.paper.block.bed.BedRuleResult canSleep() { return io.papermc.paper.block.bed.BedRuleResult.TOO_MUCH_LIGHT; }
+            public io.papermc.paper.block.bed.BedRuleResult canSetSpawn() { return io.papermc.paper.block.bed.BedRuleResult.ALLOWED; }
+            public io.papermc.paper.block.bed.BedEnterProblem problem() { return null; }
+            public Component errorMessage() { return Component.empty(); }
+        };
+        var event = new org.bukkit.event.player.PlayerBedEnterEvent(alice, world.getBlockAt(0,64,0),
+                org.bukkit.event.player.PlayerBedEnterEvent.BedEnterResult.NOT_POSSIBLE_NOW, action);
+        server.getPluginManager().callEvent(event);
+        assertEquals(org.bukkit.event.Event.Result.ALLOW, event.useBed());
+        alice.setSleeping(true); alice.setSleepTicks(100);
+        server.getScheduler().performOneTick();
+        assertEquals(1001, world.getTime()); // One normal world tick; no sleep-driven time jump.
+        assertEquals(101, world.getGameRuleValue(GameRules.PLAYERS_SLEEPING_PERCENTAGE));
+        assertTrue(nightSkipCancelled());
+        world.setTime(14000);
+        assertFalse(nightSkipCancelled());
+        var cancelled = new org.bukkit.event.player.PlayerBedEnterEvent(alice, world.getBlockAt(0,64,0),
+                org.bukkit.event.player.PlayerBedEnterEvent.BedEnterResult.NOT_POSSIBLE_NOW, action);
+        cancelled.setCancelled(true);
+        server.getPluginManager().callEvent(cancelled);
+        assertTrue(cancelled.isCancelled()); // Respect another plugin's explicit cancellation.
+    }
 }

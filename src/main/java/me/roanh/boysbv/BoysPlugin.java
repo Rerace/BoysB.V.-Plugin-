@@ -21,6 +21,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
     private final Set<UUID> teamChat = ConcurrentHashMap.newKeySet();
     private SleepController sleep;
     private CompassController compass;
+    private TeamPresentation presentation;
 
     @Override public void onEnable() {
         try {
@@ -28,6 +29,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
             store = new TeamStore(getDataFolder().toPath().resolve("teams.yml"));
             sleep = new SleepController(this);
             compass = new CompassController(this);
+            presentation = new TeamPresentation(this);
             getCommand("team").setExecutor(this);
             getCommand("team").setTabCompleter(this);
             getCommand("sleep").setExecutor(sleep);
@@ -36,6 +38,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
             getServer().getPluginManager().registerEvents(sleep, this);
             sleep.start();
             compass.start();
+            presentation.start();
         } catch (Exception ex) {
             getLogger().log(java.util.logging.Level.SEVERE, "Boys B.V. could not start; existing data has been preserved.", ex);
             getServer().getPluginManager().disablePlugin(this);
@@ -45,6 +48,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
     @Override public void onDisable() {
         if (sleep != null) sleep.stop();
         if (compass != null) compass.stop();
+        if (presentation != null) presentation.stop();
     }
 
     static void require(boolean test, String message) {
@@ -83,7 +87,7 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
     @Override public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
         try {
             String action = args.length == 0 ? "help" : args[0].toLowerCase(Locale.ROOT);
-            if (action.equals("help")) { help(sender); return true; }
+            if (action.equals("help")) { HelpPages.show(sender, "team", helpEntries(sender), args); return true; }
             if (action.equals("compass")) {
                 operator(sender);
                 require(args.length == 2, "Use /team compass <team|global|off>.");
@@ -124,12 +128,9 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                 }
                 case "invite" -> {
                     if (args.length >= 3 && List.of("accept", "deny").contains(args[1].toLowerCase(Locale.ROOT))) {
-                        Team t = store.named(tail(args, 2));
-                        require(t.invites.contains(id), "You do not have an invitation from that team.");
-                        if (args[1].equalsIgnoreCase("accept")) join(p, t, true);
-                        else { store.change(() -> t.invites.remove(id)); say(p, "Invitation declined."); }
+                        answerInvitation(p, tail(args, 2), args[1].equalsIgnoreCase("accept"));
                     } else {
-                        require(args.length == 2, "Use /team invite <player> or /team invite <accept|deny> <team name>.");
+                        require(args.length == 2, "Use /team invite <player>, /team accept <team name> or /team deny <team name>.");
                         Team t = own(p);
                         t.requireTrusted(id);
                         require(!t.mode.equals("closed"), "Your team is closed. Change /team settings first.");
@@ -139,8 +140,12 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                         require(store.own(known.getUniqueId()) == null, "That player is already in a team.");
                         store.change(() -> t.invites.add(known.getUniqueId()));
                         say(p, "Invited " + known.getName() + ".");
-                        if (target != null) say(target, "Invitation from " + t.name + ": /team invite accept " + t.name + " or /team invite deny " + t.name);
+                        if (target != null) say(target, "Invitation from " + t.name + ": /team accept " + t.name + " or /team deny " + t.name);
                     }
+                }
+                case "accept", "deny" -> {
+                    require(args.length >= 2, "Use /team " + action + " <team name>.");
+                    answerInvitation(p, tail(args, 1), action.equals("accept"));
                 }
                 case "chat" -> {
                     own(p);
@@ -193,12 +198,20 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                 default -> throw new IllegalArgumentException("Unknown command. Use /team help.");
             }
             compass.refresh();
+            presentation.refresh();
         } catch (IllegalArgumentException ex) { say(sender, ex.getMessage()); }
         catch (IOException ex) {
             say(sender, "Saving failed. Your change was not applied.");
             getLogger().log(java.util.logging.Level.SEVERE, "Cannot save Boys B.V. data", ex);
         }
         return true;
+    }
+
+    private void answerInvitation(Player player, String name, boolean accept) throws IOException {
+        Team team = store.named(name);
+        require(team.invites.contains(player.getUniqueId()), "You do not have an invitation from that team.");
+        if (accept) join(player, team, true);
+        else { store.change(() -> team.invites.remove(player.getUniqueId())); say(player, "Invitation declined."); }
     }
 
     private void join(Player p, Team t, boolean invitationOnly) throws IOException {
@@ -247,19 +260,37 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
         say(viewer, "Team totals | " + total.summary());
     }
 
-    private void help(CommandSender s) {
-        say(s, "/team create <name> | join <name> | leave | disabandon | info [team] | player info | chat");
-        say(s, "/team invite accept <team> | invite deny <team> | safe [info]");
-        say(s, "Peasant/chosen one: /team invite <player> | safe add <message> (five shared messages)");
-        say(s, "Chosen one: /team promote <player> | remove <player> | settings <open|invite|closed>");
-        say(s, "Chosen one: /team color <color> | name <name> | pvp <allow|deny> | safe remove <number>");
-        if (s.isOp()) say(s, "Operator: /team compass <team|global|off> and /sleep help");
+    static List<HelpPages.Entry> helpEntries(CommandSender sender) {
+        var entries = new ArrayList<>(List.of(
+                new HelpPages.Entry("/team create <name>", "Create a team with a random color."),
+                new HelpPages.Entry("/team join <name>", "Join an open team or a team that invited you."),
+                new HelpPages.Entry("/team leave", "Leave your team; transfer leadership first if chosen one."),
+                new HelpPages.Entry("/team disabandon", "Chosen one: delete your team when alone."),
+                new HelpPages.Entry("/team invite <player>", "Peasant/chosen one: invite a player."),
+                new HelpPages.Entry("/team accept <name>", "Accept an invitation from a team."),
+                new HelpPages.Entry("/team deny <name>", "Decline an invitation from a team."),
+                new HelpPages.Entry("/team chat", "Toggle private team chat and global chat."),
+                new HelpPages.Entry("/team info", "View your team and its player statistics."),
+                new HelpPages.Entry("/team info <team>", "View another team's members and statistics."),
+                new HelpPages.Entry("/team player info", "View your deaths, play time and player kills."),
+                new HelpPages.Entry("/team promote <player>", "Chosen one: promote a member to the next rank."),
+                new HelpPages.Entry("/team remove <player>", "Chosen one: remove another member."),
+                new HelpPages.Entry("/team safe", "Read your team's five shared message slots."),
+                new HelpPages.Entry("/team safe add <message>", "Peasant/chosen one: save a shared message."),
+                new HelpPages.Entry("/team safe remove <number>", "Chosen one: delete a saved message."),
+                new HelpPages.Entry("/team settings <open|invite|closed>", "Chosen one: change how players join."),
+                new HelpPages.Entry("/team color <color>", "Chosen one: change your team color."),
+                new HelpPages.Entry("/team name <name>", "Chosen one: rename your team."),
+                new HelpPages.Entry("/team pvp <allow|deny>", "Chosen one: allow or prevent friendly damage."),
+                new HelpPages.Entry("/team help [page]", "View eight commands per page.")));
+        if (sender.isOp()) entries.add(new HelpPages.Entry("/team compass <team|global|off>", "Operator: change the XP-bar player locator."));
+        return entries;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void chat(AsyncChatEvent event) {
         UUID id = event.getPlayer().getUniqueId();
-        if (!teamChat.contains(id)) return;
+        if (!teamChat.contains(id)) { presentation.decorate(event); return; }
         event.setCancelled(true);
         Component message = event.message();
         getServer().getScheduler().runTask(this, () -> {
@@ -294,20 +325,25 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                 store.change(() -> team.members.put(player.getUniqueId(), player.getName()));
         } catch (IOException ex) { getLogger().warning("Could not save updated player name: " + ex.getMessage()); }
         for (Team invited : store.teams.values()) if (invited.invites.contains(player.getUniqueId()))
-            say(player, "Invitation from " + invited.name + ": /team invite accept " + invited.name + " or /team invite deny " + invited.name);
+            say(player, "Invitation from " + invited.name + ": /team accept " + invited.name + " or /team deny " + invited.name);
     }
 
     @Override public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
         List<String> options = new ArrayList<>();
         Team t = sender instanceof Player p ? store.own(p.getUniqueId()) : null;
         if (args.length == 1) {
-            options.addAll(List.of("help", "create", "join", "leave", "disabandon", "invite", "chat", "info", "player", "safe"));
+            options.addAll(List.of("help", "create", "join", "leave", "disabandon", "invite", "accept", "deny", "chat", "info", "player", "safe"));
             if (t != null && sender instanceof Player p && p.getUniqueId().equals(t.leader))
                 options.addAll(List.of("promote", "remove", "settings", "color", "name", "pvp"));
             if (sender.isOp()) options.add("compass");
         } else if (args.length == 2) {
             switch (args[0].toLowerCase(Locale.ROOT)) {
                 case "join", "info" -> store.teams.values().forEach(team -> options.add(team.name));
+                case "help" -> { for (int i = 1; i <= HelpPages.pages(helpEntries(sender)); i++) options.add(Integer.toString(i)); }
+                case "accept", "deny" -> {
+                    if (sender instanceof Player p) store.teams.values().stream().filter(team -> team.invites.contains(p.getUniqueId()))
+                            .forEach(team -> options.add(team.name));
+                }
                 case "player" -> options.add("info");
                 case "settings" -> options.addAll(List.of("open", "invite", "closed"));
                 case "pvp" -> options.addAll(List.of("allow", "deny"));
@@ -322,7 +358,6 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                     }
                 }
                 case "invite" -> {
-                    options.addAll(List.of("accept", "deny"));
                     if (t != null && sender instanceof Player p && (t.leader.equals(p.getUniqueId()) || t.peasants.contains(p.getUniqueId())))
                         getServer().getOnlinePlayers().forEach(target -> options.add(target.getName()));
                 }
@@ -331,10 +366,12 @@ public class BoysPlugin extends JavaPlugin implements Listener, TabCompleter {
                 && List.of("accept", "deny").contains(args[1].toLowerCase(Locale.ROOT))) {
             store.teams.values().stream().filter(team -> team.invites.contains(p.getUniqueId())).forEach(team -> options.add(team.name));
         }
-        if (args.length > 2 && List.of("info", "join").contains(args[0].toLowerCase(Locale.ROOT))) {
+        if (args.length > 2 && List.of("info", "join", "accept", "deny").contains(args[0].toLowerCase(Locale.ROOT))) {
             String entered = tail(args, 1);
             String beforeLast = tail(Arrays.copyOf(args, args.length - 1), 1) + " ";
             return store.teams.values().stream().map(team -> team.name)
+                    .filter(name -> !List.of("accept", "deny").contains(args[0].toLowerCase(Locale.ROOT))
+                            || sender instanceof Player p && store.named(name).invites.contains(p.getUniqueId()))
                     .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(entered.toLowerCase(Locale.ROOT)))
                     .map(name -> name.substring(beforeLast.length())).sorted().toList();
         }

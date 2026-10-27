@@ -1,6 +1,6 @@
 plugins { java }
 group = "me.roanh"
-version = "1.1.0"
+version = "1.2.0"
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")

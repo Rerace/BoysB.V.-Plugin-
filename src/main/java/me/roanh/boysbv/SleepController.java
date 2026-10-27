@@ -151,11 +151,7 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
                     }
                 }
                 case "help" -> {
-                    say(sender, "/sleep amount <count|percentage%> | daytime <allow|deny>");
-                    say(sender, "/sleep text add <text> | text remove <number> | text info | text random <allow|deny>");
-                    say(sender, "Text placeholders: {player}, {world}, {sleeping}, {required}, {online}");
-                    say(sender, "Current: amount=" + plugin.getConfig().getString("sleep.amount") + ", daytime="
-                            + plugin.getConfig().getBoolean("sleep.daytime") + ", random=" + plugin.getConfig().getBoolean("sleep.random"));
+                    HelpPages.show(sender, "sleep", helpEntries(), args);
                 }
                 default -> throw new IllegalArgumentException("Use /sleep help.");
             }
@@ -168,9 +164,22 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
         return true;
     }
 
+    static List<HelpPages.Entry> helpEntries() {
+        return List.of(
+                new HelpPages.Entry("/sleep amount", "Show the current saved sleep requirement."),
+                new HelpPages.Entry("/sleep amount <count|percentage%>", "Replace the requirement with a count or percentage."),
+                new HelpPages.Entry("/sleep text add <text>", "Add an announcement; supports {player}, {world}, {sleeping}, {required}, {online}."),
+                new HelpPages.Entry("/sleep text remove <number>", "Remove a numbered announcement."),
+                new HelpPages.Entry("/sleep text info", "List your saved announcements."),
+                new HelpPages.Entry("/sleep text random <allow|deny>", "Choose messages randomly or cycle through them."),
+                new HelpPages.Entry("/sleep daytime <allow|deny>", "Allow daytime resting without skipping time; only nights skip."),
+                new HelpPages.Entry("/sleep help [page]", "View eight commands per page; operator only."));
+    }
+
     @Override public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
         if (!sender.isOp()) return List.of();
         List<String> choices = args.length == 1 ? List.of("help", "amount", "text", "daytime")
+                : args.length == 2 && args[0].equalsIgnoreCase("help") ? List.of("1")
                 : args.length == 2 && args[0].equalsIgnoreCase("text") ? List.of("add", "remove", "info", "random")
                 : args.length == 2 && args[0].equalsIgnoreCase("amount") ? List.of("1", "50%", "100%")
                 : (args.length == 2 && args[0].equalsIgnoreCase("daytime"))

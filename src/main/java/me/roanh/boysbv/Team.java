@@ -3,6 +3,8 @@ package me.roanh.boysbv;
 import java.util.*;
 
 final class Team {
+    static final List<String> START_COLORS = List.of("red", "gold", "yellow", "green", "aqua", "blue",
+            "light_purple", "dark_green", "dark_aqua", "dark_red", "dark_purple");
     final String id;
     String name;
     String color = "white";
@@ -17,6 +19,7 @@ final class Team {
     Team(String id, String name, UUID leader, String playerName) {
         this.id = id;
         this.name = validName(name);
+        this.color = START_COLORS.get(java.util.concurrent.ThreadLocalRandom.current().nextInt(START_COLORS.size()));
         this.leader = leader;
         members.put(leader, playerName);
     }
