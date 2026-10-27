@@ -1,0 +1,8 @@
+# Operator-only commands update this file automatically.
+compass: global
+sleep:
+  amount: '50%'
+  daytime: false
+  random: true
+  texts:
+    - '{player} is sleeping ({sleeping}/{required} needed in {world}).'
