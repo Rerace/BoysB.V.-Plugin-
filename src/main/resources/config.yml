@@ -1,0 +1,11 @@
+# Operator-only commands update this file automatically.
+compass: global
+teams:
+  saved-message-limit: 5
+# These optional overrides apply to all block spawners and spawner minecarts.
+spawner: {}
+sleep:
+  amount: '50%'
+  random: true
+  texts:
+    - '{player} is sleeping ({sleeping}/{required} needed in {world}).'
