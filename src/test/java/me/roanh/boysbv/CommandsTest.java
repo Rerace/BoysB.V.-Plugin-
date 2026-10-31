@@ -201,12 +201,11 @@ class CommandsTest {
         command(alice, "sleep text add {player} bedtime");
         command(alice, "sleep text remove 1");
         command(alice, "sleep text random deny");
-        command(alice, "sleep daytime allow");
         plugin.reloadConfig();
         assertEquals("75%", plugin.getConfig().getString("sleep.amount"));
         assertEquals(java.util.List.of("{player} bedtime"), plugin.getConfig().getStringList("sleep.texts"));
         assertFalse(plugin.getConfig().getBoolean("sleep.random"));
-        assertTrue(plugin.getConfig().getBoolean("sleep.daytime"));
+        assertFalse(plugin.getConfig().isSet("sleep.daytime"));
     }
 
     @Test void teamChatDoesNotReachGlobalAndToggleReturnsToGlobal() {
@@ -292,7 +291,7 @@ class CommandsTest {
         assertFalse(allowed.isCancelled()); // Alice is one of two eligible players.
     }
 
-    @Test void daytimeBedEntryAllowsRestWithoutChangingTimeAndNightStillSkips() {
+    @Test void daytimeSleepIsNoLongerOverriddenAndNightStillSkips() {
         alice.setOp(true);
         command(alice, "sleep daytime allow");
         command(alice, "sleep amount 1");
@@ -307,7 +306,8 @@ class CommandsTest {
         var event = new org.bukkit.event.player.PlayerBedEnterEvent(alice, world.getBlockAt(0,64,0),
                 org.bukkit.event.player.PlayerBedEnterEvent.BedEnterResult.NOT_POSSIBLE_NOW, action);
         server.getPluginManager().callEvent(event);
-        assertEquals(org.bukkit.event.Event.Result.ALLOW, event.useBed());
+        assertEquals(org.bukkit.event.Event.Result.DEFAULT, event.useBed());
+        assertTrue(event.isCancelled());
         alice.setSleeping(true); alice.setSleepTicks(100);
         server.getScheduler().performOneTick();
         assertEquals(1001, world.getTime()); // One normal world tick; no sleep-driven time jump.

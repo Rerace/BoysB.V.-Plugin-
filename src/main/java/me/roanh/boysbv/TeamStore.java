@@ -33,6 +33,25 @@ final class TeamStore {
             throw new IllegalArgumentException("That team name is already in use.");
     }
 
+    void place(UUID player, String name, Team destination) throws IOException {
+        change(() -> {
+            Team previous = own(player);
+            if (previous != null && previous != destination) {
+                previous.members.remove(player);
+                previous.peasants.remove(player);
+                if (previous.members.isEmpty()) teams.remove(previous.id);
+                else if (player.equals(previous.leader)) {
+                    UUID successor = previous.members.keySet().stream().filter(previous.peasants::contains).findFirst()
+                            .orElse(previous.members.keySet().iterator().next());
+                    previous.appoint(successor);
+                    previous.peasants.remove(player);
+                }
+            }
+            destination.members.put(player, name);
+            teams.values().forEach(team -> team.invites.remove(player));
+        });
+    }
+
     void change(Runnable mutation) throws IOException {
         var previous = encode();
         try {
@@ -63,6 +82,7 @@ final class TeamStore {
             yaml.set(p + "color", t.color);
             yaml.set(p + "mode", t.mode);
             yaml.set(p + "pvp", t.pvp);
+            yaml.set(p + "hearts", t.hearts);
             t.members.forEach((id, name) -> yaml.set(p + "members." + id, name));
             yaml.set(p + "peasants", t.peasants.stream().map(UUID::toString).toList());
             yaml.set(p + "invites", t.invites.stream().map(UUID::toString).toList());
@@ -92,11 +112,13 @@ final class TeamStore {
             t.mode = s.getString("mode", "invite");
             if (!List.of("open", "invite", "closed").contains(t.mode)) throw new IllegalArgumentException("Invalid team mode");
             t.pvp = s.getBoolean("pvp");
+            t.hearts = s.getBoolean("hearts");
             s.getStringList("peasants").forEach(v -> t.peasants.add(UUID.fromString(v)));
             t.peasants.retainAll(t.members.keySet());
             t.peasants.remove(leader);
             s.getStringList("invites").forEach(v -> t.invites.add(UUID.fromString(v)));
-            for (String note : s.getStringList("notes")) t.addNote(note);
+            // Saved messages must survive a lower configured limit, including restarts.
+            for (String note : s.getStringList("notes")) { Team.validateNote(note); t.notes.add(note); }
             unique(t.name, null);
             teams.put(id, t);
         }

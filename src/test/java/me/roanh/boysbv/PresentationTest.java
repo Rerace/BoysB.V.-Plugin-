@@ -60,10 +60,17 @@ class PresentationTest {
     }
 
     @Test void everyHelpPageHasAtMostEightSeparateOrangeCommandsAndWhiteDescriptions() {
-        for (int page = 1; page <= 3; page++) {
+        alice.setOp(true);
+        command(alice, "team create Alpha");
+        command(alice, "team settings open");
+        command(bob, "team join Alpha");
+        drain(alice);
+        int total = plugin.helpEntries(alice).size();
+        int pages = (total + 7) / 8;
+        for (int page = 1; page <= pages; page++) {
             command(alice, "team help " + page);
             var commands = drain(alice).stream().filter(c -> text(c).startsWith("/team ")).toList();
-            assertEquals(page < 3 ? 8 : 5, commands.size());
+            assertEquals(Math.min(8, total - (page - 1) * 8), commands.size());
             for (var row : commands) {
                 assertEquals(HelpPages.ORANGE, row.color());
                 assertEquals(NamedTextColor.WHITE, row.children().getFirst().color());
@@ -71,7 +78,7 @@ class PresentationTest {
         }
         alice.setOp(true);
         command(alice, "sleep help");
-        assertEquals(8, drain(alice).stream().filter(c -> text(c).startsWith("/sleep ")).count());
+        assertEquals(7, drain(alice).stream().filter(c -> text(c).startsWith("/sleep ")).count());
         command(alice, "team help 0");
         assertTrue(text(drain(alice).getFirst()).contains("Choose a help page"));
         command(alice, "team help 99");

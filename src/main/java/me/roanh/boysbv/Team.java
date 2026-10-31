@@ -10,6 +10,7 @@ final class Team {
     String color = "white";
     String mode = "invite";
     boolean pvp;
+    boolean hearts;
     UUID leader;
     final Map<UUID, String> members = new LinkedHashMap<>();
     final Set<UUID> peasants = new HashSet<>();
@@ -62,8 +63,24 @@ final class Team {
     }
 
     void addNote(String note) {
-        if (notes.size() >= 5) throw new IllegalArgumentException("Your team already has five saved messages.");
+        addNote(note, 5);
+    }
+
+    static void validateNote(String note) {
         if (note.isBlank() || note.length() > 256) throw new IllegalArgumentException("Messages must be 1-256 characters.");
+    }
+
+    void addNote(String note, int limit) {
+        if (notes.size() >= limit) throw new IllegalArgumentException("Your team has " + notes.size()
+                + " saved messages. Remove messages until below the current limit of " + limit + " before adding more.");
+        validateNote(note);
         notes.add(note);
+    }
+
+    void appoint(UUID target) {
+        if (!members.containsKey(target)) throw new IllegalArgumentException("That player must belong to the specified team first.");
+        if (!target.equals(leader)) peasants.add(leader);
+        peasants.remove(target);
+        leader = target;
     }
 }

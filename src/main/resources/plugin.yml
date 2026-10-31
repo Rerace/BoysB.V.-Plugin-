@@ -3,7 +3,7 @@ prefix: Boys B.V.
 version: '${version}'
 main: me.roanh.boysbv.BoysPlugin
 api-version: '26.3'
-description: Boys B.V. teams and configurable sleeping.
+description: Boys B.V. teams, sleeping, private health labels and operator server controls.
 authors: [Roanh]
 softdepend: [LuckPerms]
 commands:
@@ -16,7 +16,15 @@ commands:
     aliases: [bbsleep]
     description: Operator sleep settings
     usage: /sleep help
+    permission: boysbv.admin
+  boys:
+    description: Operator server controls and performance monitor
+    usage: /boys help
+    permission: boysbv.admin
 permissions:
+  boysbv.admin:
+    default: op
+    description: Show and enter operator command roots; commands still require operator status.
   boysbv.team:
     default: true
     description: Use teams; leadership is checked separately.

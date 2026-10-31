@@ -69,13 +69,6 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGHEST)
-    public void daytime(PlayerBedEnterEvent e) {
-        // Only override vanilla's time-of-day rejection, never unsafe/occupied/distant beds.
-        if (plugin.getConfig().getBoolean("sleep.daytime") && e.getPlayer().getWorld().getEnvironment() == World.Environment.NORMAL
-                && e.getBedEnterResult() == PlayerBedEnterEvent.BedEnterResult.NOT_POSSIBLE_NOW
-                && e.useBed() == Event.Result.DEFAULT) e.setUseBed(Event.Result.ALLOW);
-    }
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void entered(PlayerBedEnterEvent e) {
         Player player = e.getPlayer();
@@ -113,11 +106,6 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
                     required(args[1], 1);
                     plugin.saveSetting("sleep.amount", args[1]);
                     say(sender, "Sleep requirement: " + args[1] + ". This replaces the previous count or percentage. All eligible players sleeping also skips night.");
-                }
-                case "daytime" -> {
-                    require(args.length == 2, "Use /sleep daytime <allow|deny>.");
-                    plugin.saveSetting("sleep.daytime", toggle(args[1]));
-                    say(sender, "Daytime resting: " + args[1]);
                 }
                 case "text" -> {
                     require(args.length >= 2, "Use /sleep text <add|remove|info|random>.");
@@ -172,18 +160,16 @@ final class SleepController implements Listener, CommandExecutor, TabCompleter {
                 new HelpPages.Entry("/sleep text remove <number>", "Remove a numbered announcement."),
                 new HelpPages.Entry("/sleep text info", "List your saved announcements."),
                 new HelpPages.Entry("/sleep text random <allow|deny>", "Choose messages randomly or cycle through them."),
-                new HelpPages.Entry("/sleep daytime <allow|deny>", "Allow daytime resting without skipping time; only nights skip."),
                 new HelpPages.Entry("/sleep help [page]", "View eight commands per page; operator only."));
     }
 
     @Override public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
         if (!sender.isOp()) return List.of();
-        List<String> choices = args.length == 1 ? List.of("help", "amount", "text", "daytime")
+        List<String> choices = args.length == 1 ? List.of("help", "amount", "text")
                 : args.length == 2 && args[0].equalsIgnoreCase("help") ? List.of("1")
                 : args.length == 2 && args[0].equalsIgnoreCase("text") ? List.of("add", "remove", "info", "random")
                 : args.length == 2 && args[0].equalsIgnoreCase("amount") ? List.of("1", "50%", "100%")
-                : (args.length == 2 && args[0].equalsIgnoreCase("daytime"))
-                    || (args.length == 3 && args[0].equalsIgnoreCase("text") && args[1].equalsIgnoreCase("random"))
+                : (args.length == 3 && args[0].equalsIgnoreCase("text") && args[1].equalsIgnoreCase("random"))
                     ? List.of("allow", "deny") : List.of();
         String prefix = args[args.length - 1].toLowerCase(Locale.ROOT);
         return choices.stream().filter(s -> s.startsWith(prefix)).toList();

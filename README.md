@@ -7,8 +7,8 @@ LuckPerms can manage the standard Bukkit permission `boysbv.team`.
 ## Install
 
 1. Build with `./gradlew.bat build` from the repository root (Linux: `sh ./gradlew build`).
-2. Stop the server and copy `build/libs/BoysBV-1.2.0.jar` into `plugins/`. Remove the previous BoysBV JAR when upgrading.
-3. Start Paper 26.3. In game, run `/team help`; operators can run `/sleep help`.
+2. Stop the server and copy `build/libs/BoysBV-1.3.0.jar` into `plugins/`. Remove the previous BoysBV JAR when upgrading.
+3. Start Paper 26.3. In game, run `/team help`; operators can run `/sleep help` and `/boys help`.
 
 The plugin creates `plugins/BoysBV/config.yml` and saves teams in `plugins/BoysBV/teams.yml`.
 Changes from commands save automatically. Back up both files when moving servers.
@@ -16,7 +16,7 @@ Restart after manual configuration edits. Do not edit `teams.yml` while the serv
 Invalid saved team data stops the plugin from enabling, preserving the file for repair.
 Failed saves roll back the in-memory change and report an error.
 
-Use `/boysbv:team` and `/boysbv:sleep` if another plugin owns those commands.
+Use `/boysbv:team`, `/boysbv:sleep` and `/boysbv:boys` if another plugin owns those commands.
 The workspace's older SurvivalExtra plugin also manages sleeping; disable its sleep feature
 before installing BoysBV. Avoid running two sleep or locator managers together.
 
@@ -24,7 +24,7 @@ before installing BoysBV. Avoid running two sleep or locator managers together.
 
 | Command | Behaviour |
 | --- | --- |
-| `/team create <name>` | Creates an invite-only team with you as chosen one and a random color. Names are unique ignoring case, 1–32 characters. Spaces and periods are supported. |
+| `/team create <name>` | Every player can create an invite-only team with themselves as chosen one and a random color. Leave your current team first. Names are unique ignoring case, 1–32 characters. Spaces and periods are supported. |
 | `/team join <name>` | Joins an open team or accepts your invitation. One team per player. |
 | `/team leave` | Members can leave; leaders must transfer leadership first. |
 | `/team disabandon` | Deletes your team only when you are its sole member and leader. `/team disband` also works. |
@@ -34,18 +34,38 @@ before installing BoysBV. Avoid running two sleep or locator managers together.
 | `/team chat` | Toggles between private team chat and normal global chat. Resets on logout/removal/leave. |
 | `/team info` | Shows your team's name, chosen one, members, ranks, join mode, PvP setting, and each member's deaths, total play time and player kills, plus team totals. |
 | `/team info <team>` | Shows the same information for a named team, even if you are not a member. Names can contain spaces. |
-| `/team player info` | Shows your own deaths, total play time and player kills, even if you have no team. |
+| `/team player info [player]` | Everyone can view deaths, total play time and player kills for themselves or any named player who has logged in before. Console must supply a name. |
 | `/team promote <player>` | Chosen one promotes muggle → peasant → chosen one. Promoting a peasant transfers leadership; the former chosen one becomes peasant. |
 | `/team remove <player>` | Leader removes another member. |
-| `/team safe` | Lists up to five shared saved messages, numbered. |
+| `/team safe` | Lists shared saved messages, numbered, and the current limit (default five). |
 | `/team safe add <message>` | Peasants and the chosen one can save a message, up to 256 characters. `/team safe <message>` also works with the same rank restriction. All members can read saved messages. |
 | `/team safe remove <number>` | Leader removes a saved message, freeing a slot. |
 | `/team settings <open\|invite\|closed>` | Leader changes joining rules. Closed blocks invitations and joins and clears outstanding invitations. |
 | `/team color <color>` | Leader chooses a standard color name or `#RRGGBB`, used in team info, private chat and team locator dots. |
 | `/team name <name>` | Leader renames the team without losing members or invitations. |
 | `/team pvp <allow\|deny>` | Leader changes friendly damage. Default: deny. Applies to player-caused melee, projectile and other attributed damage; environmental damage still applies. |
+| `/team hearts` | Chosen one toggles health labels above teammates. Only other members of that team can see them. Default: off; the setting survives restarts. |
+| `/team place <player> <team>` | Operator/console assigns a previously known player to a team, bypassing invitations and closed joining. Team names can contain spaces. |
+| `/team promote <player> <team>` | Operator/console directly appoints an existing member of the specified team as chosen one, regardless of their current rank. The former chosen one becomes peasant. |
+| `/team safe <amount>` | Operator/console sets the message limit for all teams, from 0 to 10000. Existing messages are retained, including across restarts. |
 | `/team compass <team\|global\|off>` | **Server operator only.** Sets the locator mode for everyone. |
-| `/team help [page]` | Lists eight commands per page, one per line, with orange commands and white descriptions. Click Previous/Next to navigate. |
+| `/team help [page]` | Shows only commands available for your membership, rank and operator status. Eight commands per page, one per line, orange commands and white descriptions. Click Previous/Next to navigate. |
+
+Lowering the saved-message limit never deletes old messages. For example, lowering from
+seven stored messages to a limit of two keeps all seven readable; delete messages until
+only one remains before adding a new one. A limit of zero disables new messages. To save
+a message consisting only of a number, use `/team safe add <number>`; the bare numeric
+form is reserved for the operator limit command.
+
+When an operator moves a chosen one to another team, the old team appoints a remaining
+peasant first, otherwise the first remaining member. An empty old team is removed.
+The destination's existing leader remains chosen one until explicitly changed with the
+operator promotion command. Placement and leader reassignment are saved atomically.
+
+Health labels show current/max hearts plus golden absorption hearts. They follow players
+without replacing scoreboards. They are hidden for players outside the team, sneaking,
+invisible or vanished targets, spectators, and targets in another world, and do not show
+through walls. Disabling hearts, leaving the team or shutting down removes the labels.
 
 Global chat and the player list show a colored `[Team name]` before the player name.
 Team name and color changes update both automatically; leaving/removal removes the prefix.
@@ -58,8 +78,9 @@ their saved color, and the chosen one can still change it with `/team color`.
 Peasants can invite players and add saved messages. Only the chosen one can promote,
 remove members, rename/recolor the team, change join/PvP settings or remove saved messages.
 "Leader" in the remaining command descriptions means chosen one.
-An operator does not bypass team leadership checks.
-If the chosen one is offline, team leadership remains theirs. Existing teams keep their
+Operators use the explicit three-argument promotion and placement commands to reassign
+leadership; operator status does not bypass other leader-only commands.
+If the chosen one is offline, an operator can appoint another member. Existing teams keep their
 members and promotions on upgrade; the previous leader is displayed as chosen one.
 
 Statistics come directly from Minecraft's existing server statistics, including history
@@ -96,7 +117,6 @@ Recheck this adapter before upgrading Minecraft.
 | `/sleep text remove <number>` | Removes a numbered announcement. |
 | `/sleep text info` | Lists all saved texts with numbers. |
 | `/sleep text random <allow\|deny>` | Chooses messages randomly, or cycles through them in order when denied. |
-| `/sleep daytime <allow\|deny>` | Allows resting in beds during the day. Default: deny. Daytime resting never skips a full day. |
 | `/sleep help [page]` | Lists commands with the same eight-per-page orange/white help layout. |
 
 Announcements support `{player}`, `{world}`, `{sleeping}`, `{required}` and `{online}`.
@@ -111,9 +131,32 @@ Spectators and players marked sleeping-ignored do not count. Sleepers must be in
 100 ticks (five seconds) before counting toward a skip. The plugin lets the server perform
 the normal night transition and weather handling. Original sleep game rules are restored
 on clean shutdown and recorded in world data for recovery after an interrupted run.
-With `/sleep daytime allow`, players can lie in bed during the day. Daytime resting does
-not trigger any sleep-driven time jump; the world continues ticking normally. Only night
-can skip once the latest saved sleep requirement is met.
+Daytime sleeping has been removed. The plugin no longer overrides vanilla bed-entry rules,
+and the old `sleep.daytime` configuration key is removed automatically on upgrade.
+Only night can skip once the latest saved sleep requirement is met.
+
+## Server controls — operators and console only
+
+| Command | Behaviour |
+| --- | --- |
+| `/boys tick-rate` | Toggles a private right-side TPS/MSPT scoreboard. Run again to hide it and restore your previous scoreboard. Console prints one sample. |
+| `/boys spawner SpawnCount <amount>` | Changes how many mobs a spawner attempts to spawn per cycle. |
+| `/boys spawner MaxNearbyEntities <amount>` | Changes the nearby-entity limit. |
+| `/boys spawner RequiredPlayerRange <amount>` | Changes the player activation range in blocks. The amount is required. |
+| `/boys help [page]` | Shows the server controls you may use. |
+
+The tick monitor refreshes once a second and shows one-minute TPS, average milliseconds
+per tick, and a lag status. TPS below 18 or tick time above 50 ms is marked as lagging.
+Minecraft's standard scoreboard appears on the right side; it cannot be pinned to an
+exact lower-right pixel position without client-side customisation. Monitoring affects
+only the operator who enables it, and turns off on logout or loss of operator status.
+
+Spawner amounts must be integers from 1 to 32767. Each chosen setting is saved as a
+global override for all block spawners and spawner minecarts. Loaded spawners update
+immediately; unloaded ones update when loaded, and newly placed spawners receive the
+settings. Unconfigured properties keep their existing Minecraft/custom values. The
+spawned mob type, delay and spawn radius are not changed. Overrides survive restarts;
+world chunks are never force-loaded to apply them.
 
 ## LuckPerms
 
@@ -123,20 +166,25 @@ can skip once the latest saved sleep requirement is met.
 /lp group default permission set boysbv.team true
 ```
 
-Sleep settings and compass settings check operator status directly, as requested.
+Sleep settings, server controls and administrative team commands check operator status directly.
 Granting a LuckPerms wildcard does not substitute for being a server operator.
+The `boysbv.admin` permission defaults to operators and hides the `/boys` and `/sleep`
+roots from the standard Bukkit help for ordinary players; operator checks still apply.
 
 ## Development and verification
 
 Build and test: `./gradlew.bat build` (Java 25+; the wrapper supports Java 26).
 Automated JUnit/MockBukkit checks cover team lifecycle, leadership, permissions, invitations,
 shared notes, disk persistence and failed-write rollback, chat isolation, friendly melee and
-projectiles, sleep thresholds, daytime bed entry/skip prevention, game-rule restoration,
+projectiles, sleep thresholds, removal of daytime bed-entry overrides, game-rule restoration,
 orange/white paged help, team tab/chat prefixes, short invitation commands and compass mode
-switching, client reception, teammate filtering and marker removal.
+switching, client reception, teammate filtering and marker removal. Administrative checks cover
+placement/leadership succession, retaining over-limit notes, role-filtered help, health-label
+privacy, known-player statistics, spawner updates and private tick-monitor restoration.
 MockBukkit does not render the native locator: verify team/global/off using two team members
 and a third player in a separate team on a Paper 26.3 test server before production use.
-Also check real bed entry during daytime and a full night transition in game.
+Also check health-label placement, the right-side tick monitor, spawner activation and a
+full night transition in game.
 
 References: [Paper project setup](https://docs.papermc.io/paper/dev/project-setup/),
 [Minecraft 26.3](https://www.minecraft.net/en-us/article/minecraft-java-edition-26-3).
